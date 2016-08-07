@@ -352,8 +352,6 @@ class ChatRoomHandler implements Runnable {
 		return null;
 	}
 
-
-
 }
 
 class ChatConnectionHandler implements Runnable
