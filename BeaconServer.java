@@ -138,6 +138,15 @@ class MainHandler implements Runnable {
 		return inRange;
 	}
 
+	public Beacon getBeaconById(int id) {
+		for(Beacon possible : currentBeaconGroups) {
+			if(possible.getID() == id) {
+				return possible;
+			}
+		}
+		return null;
+	}
+
 	public void addPhoto(BufferedImage newPhoto, String[] tags, Location origin) {
 		try {
 			if(recentTenPhotos.size() >= 10) {
@@ -189,12 +198,13 @@ class ConnectionHandler implements Runnable {
 			System.out.println(params);
 			int requestType = Integer.parseInt(params[0]);
 			System.out.println("Identified request type as " + requestType);
+			double lat;
+			double lon;
 			switch(requestType) {
 				case 1:
 				  // startup, give us 10 buffered images and ???
 				  // technically they gave us location, but we're just sending last 10 soz
-				  OutputStream os = clientSocket.getOutputStream();
-				  BufferedImage[] recentTen = parent.getRecentTenPhotos();
+				  BufferedImage[] recentTen = myParent.getRecentTenPhotos();
 				  for(BufferedImage bufimg : recentTen) {
 				  	ImageIO.write(bufimg, "png", os);
 				  }
@@ -205,11 +215,11 @@ class ConnectionHandler implements Runnable {
 				        // and all their feature images
 
 				  // reading what user sent me
-				  double lat = Double.parseDouble(params[1]);
-				  double lon = Double.parseDouble(params[2]);
+				  lat = Double.parseDouble(params[1]);
+				  lon = Double.parseDouble(params[2]);
 				  double radius = Double.parseDouble(params[3]);
 
-				  ArrayList<Beacon> nearbyBeacons = parent.getBeaconLocations(radius, lat, lon);
+				  ArrayList<Beacon> nearbyBeacons = myParent.getBeaconLocations(radius, lat, lon);
 
 
 				  int numNearby = nearbyBeacons.size(); // how many beacons stuff we have to send
@@ -228,7 +238,6 @@ class ConnectionHandler implements Runnable {
 				  // response string is now done, sending it,
 				  pw.println(responseString);
 				  
-				  OutputStream os = clientSocket.getOutputStream();
 				  // now we send the images (after string has been received and parsed)
 				  for(Beacon tmp : nearbyBeacons) {
 				  	            // (Buffered Image)   ,  
@@ -236,16 +245,22 @@ class ConnectionHandler implements Runnable {
 				  }
 
 				  break;
+
 				case 3:
-				  
-
-
+				  int beaconID = Integer.parseInt(params[1]);
+				  Beacon target = myParent.getBeaconById(beaconID);
+				  ArrayList<PhotoWrapper> photos = target.getPhotos();
+				  String response = "" + photos.size();
+				  pw.println(response);
+				  for(int i = 0; i < photos.size(); i ++) {
+				  	ImageIO.write(photos.get(i).getImage(), "png", os);
+				  }
 				  break;
 				case 5:
 				  // guy is sending us stuff, format:
 				  // 5 [lat] [lon] [tag1] [tag2] ... [tag3]
-				  double lat = Double.parseDouble(params[1]);
-				  double lon = Double.parseDouble(params[2]);
+				  lat = Double.parseDouble(params[1]);
+				  lon = Double.parseDouble(params[2]);
 				  System.out.println("Parsed lat and lon as " + lat + ", " + lon);
 				  String[] tags = new String[(params.length - 3)];
 				  for(int i = 0; i < params.length - 3; i ++) {
