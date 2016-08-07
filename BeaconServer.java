@@ -1,18 +1,9 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.io.File;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Collections;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.Random;
 import javax.imageio.ImageIO;
+import java.util.*;
+import java.lang.*;
+import java.io.*;
 
 
 public class BeaconServer 
@@ -94,9 +85,22 @@ class MainHandler implements Runnable {
 			}
 
 			// update photo groups with clustering
-			// 
+			// TODO
 		}
 	}
+
+	// ---------------
+	// credit for this method goes to http://www.geodatasource.com/developers/java
+	// ---------------
+	private static double distance(double lat1, double lon1, double lat2, double lon2) {
+		double theta = lon1 - lon2;
+		double dist = Math.sin(deg2rad(lat1)) * Math.sin(deg2rad(lat2)) + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.cos(deg2rad(theta));
+		dist = Math.acos(dist);
+		dist = rad2deg(dist);
+		dist = dist * 60 * 1.1515;
+		return (dist);
+	}
+	// ---------------
 
 	public BufferedImage[] getRecentTenPhotos() {
 		BufferedImage[] recent10 = new BufferedImage[10];
@@ -106,6 +110,18 @@ class MainHandler implements Runnable {
 		}
 		return recent10;
 	}
+
+	public ArrayList<Beacon> getBeaconLocations(double radius, double mylat, double mylon) {
+		ArrayList<Beacon> inRange = new ArrayList<Beacon>();
+		for(Beacon possible : currentBeaconGroups) {
+			if(distance(mylat, mylon, possible.getCentroid().lat(), possible.getCentroid().lon()) < radius) {
+				inRange.add(possible);
+			}
+		}
+		return inRange;
+	}
+
+	// TODO: return events
 
 }
 
