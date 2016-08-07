@@ -121,6 +121,19 @@ class MainHandler implements Runnable {
 		return inRange;
 	}
 
+	public void addPhoto(BufferedImage newPhoto, String[] tags, Location origin) {
+		if(recentTenPhotos.size() >= 10) {
+			recentTenPhotos.poll();
+		}
+		recentTenPhotos.add(newPhoto);
+		int id = PhotoWrapper.last_ID;
+		PhotoWrapper.last_ID ++;
+		String filename = "img_" + id + ".png";
+		ImageIO.write(newPhoto, "png", new File(filename))
+		PhotoWrapper newPhoto = new PhotoWrapper(filename, tags, System.nanoTime(), id, origin);
+		allRecentPhotos.add(newPhoto);
+	}
+
 	// TODO: return events
 
 }
@@ -160,8 +173,15 @@ class ConnectionHandler implements Runnable {
 				case 3:
 
 				  break;
-				case 4:
-
+				case 5:
+				  // guy is sending us stuff, format:
+				  // 5 [lat] [lon] [tag1] [tag2] ... [tag3]
+				  double lat = Double.parseDouble(params[1]);
+				  double lon = Double.parseDouble(params[2]);
+				  String[] tags = new String[(params.length - 3)];
+				  for(int i = 0; i < params.length - 3; i ++) {
+				  	tags[i] = parms[3+i];
+				  }
 				  break;
 				default:
 				  break;
@@ -220,6 +240,7 @@ class Beacon {
 
 class PhotoWrapper {
 
+	public static int last_ID = 1;
 	private int myID;
 	private String myFilename;
 	private Location myOrigin;
