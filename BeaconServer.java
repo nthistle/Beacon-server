@@ -66,6 +66,7 @@ class MainHandler implements Runnable {
 
 	private ArrayList<PhotoWrapper> allRecentPhotos;
 	private ArrayList<Beacon> currentBeaconGroups;
+	private ArrayList<Business> businesses;
 	private ConcurrentLinkedQueue<BufferedImage> recentTenPhotos;
 
 	public MainHandler() {
@@ -73,6 +74,7 @@ class MainHandler implements Runnable {
 		allRecentPhotos = new ArrayList<PhotoWrapper>();
 		currentBeaconGroups = new ArrayList<Beacon>();
 		recentTenPhotos = new ConcurrentLinkedQueue<BufferedImage>();
+		businesses = new ArrayList<Business>();
 	}
 
 	public void run() {
@@ -90,13 +92,67 @@ class MainHandler implements Runnable {
 					}
 				}
 
+				// first find our businesses and crap
+				ArrayList<Beacon> newBeaconGroups = new ArrayList<Beacon>();
+
+				ArrayList<PhotoWrapper> photosLeft = new ArrayList<PhotoWrapper>();
+				for(int i = 0; i < allRecentPhotos.size(); i ++) {
+					photosLeft.add(allRecentPhotos.get(i));
+				}
+
+				for(Business b : businesses) {
+					// find everything within 0.028 miles and add 'em
+					ArrayList<PhotoWrapper> thePhotos = new ArrayList<PhotoWrapper>();
+
+					PhotoWrapper pw;
+					for(int i = 0; i < photosLeft.size(); i ++) {
+						pw = photosLeft.get(i);
+						if(distance(b.getLocation().lat(), b.getLocation().lon(), pw.getLocation().lat(), pw.getLocation().lon()) < 0.028) {
+							thePhotos.add(pw);
+							photosLeft.remove(i);
+							i --;
+						}
+					}
+					// now have all the crap within 0.028 miles
+					Beacon newBeacon = new Beacon(thePhotos, (Beacon.last_ID++), b.getLocation(), thePhotos.get(0).getImage(), b);
+					newBeaconGroups.add(newBeacon);
+				}
+
+				// now have beacons for all the businesses and anything in their range
+
+				// who cares what order we go in
+				for(int i = 0; i < photosLeft.size(); i ++) {
+					ArrayList<PhotoWrapper> onesToTake = new ArrayList<PhotoWrapper>();
+					PhotoWrapper pw1 = photosLeft.get(i);
+					onesToTake.add(pw1);
+					photosLeft.remove(i);
+					i --;
+
+					for(int j = 0; j < photosLeft.size(); j ++) {
+						PhotoWrapper pw2 = photosLeft.get(j);
+						if(distance(pw1.getLocation().lat(), pw1.getLocation().lon(), pw2.getLocation().lat(), pw2.getLocation().lon()) < 0.028) {
+							onesToTake.add(pw2);
+							photosLeft.remove(j);
+							j --;
+						}
+					}
+
+					Beacon newBeacon = new Beacon(onesToTake, (Beacon.last_ID++), pw1.getLocation(), thePhotos.get(0).getImage());
+					newBeaconGroups.add(newBeacon);
+				}
+
+				currentBeaconGroups = newBeaconGroups;
+
+				/*
+
 				currentBeaconGroups = new ArrayList<Beacon>();
 				for(PhotoWrapper pw : allRecentPhotos) {
 					ArrayList<PhotoWrapper> tmp = new ArrayList<PhotoWrapper>();
 					tmp.add(pw);
 					Beacon newBeacon = new Beacon(tmp, (Beacon.last_ID++), pw.getOrigin(), pw.getImage());
-					currentBeaconGroups.append(newBeacon);
+					currentBeaconGroups.add(newBeacon);
 				}
+				*/
 				// update photo groups with clustering  ^^^^^^^
 				// TODO
 			}
@@ -152,6 +208,10 @@ class MainHandler implements Runnable {
 			}
 		}
 		return null;
+	}
+
+	public void addBusiness(Business b) {
+		businesses.add(b);
 	}
 
 	public void addPhoto(BufferedImage newPhoto, String[] tags, Location origin) {
@@ -259,6 +319,14 @@ class ConnectionHandler implements Runnable {
 				  ArrayList<PhotoWrapper> photos = target.getPhotos();
 				  String response = "" + photos.size();
 				  pw.println(response);
+				  for(int j = 0; j < photos.size(); j ++) {
+				  	// new line for each photo, 1st thing on the line is an int, num of likes, rest are tags (strings)
+				  	String thisline = "" + (new Random(j)).nextInt(11);
+				  	for(String s : photos.get(j).getTags()) {
+				  		thisline = thisline + " " + s;
+				  	}
+				  	pw.println(thisline);
+				  }
 				  for(int i = 0; i < photos.size(); i ++) {
 				  	ImageIO.write(photos.get(i).getImage(), "png", os);
 				  }
@@ -278,7 +346,6 @@ class ConnectionHandler implements Runnable {
 				  System.out.println("Now attempting to read image");
 				  BufferedImage img = ImageIO.read(mySocketClient.getInputStream());
 				  System.out.println("Image read");
-				  System.out.println("Now formatting nice photo and calling parent whatchaminiot");
 				  // done
 				  myParent.addPhoto(img, tags, new Location(lat, lon));
 
@@ -296,6 +363,8 @@ class ConnectionHandler implements Runnable {
 				  String businessName = br.readLine();
 				  String businessDescription = br.readLine();
 				  String businessAddress = br.readLine();
+				  Business newBus = new Business(businessName, businessDescription, businessAddress, new Location(lat,lon));
+				  myParent.addBusiness(newBus);
 				  break;
 				default:
 				  break;
@@ -384,6 +453,10 @@ class Beacon {
 	public boolean isBusiness() {
 		return myBusiness != null;
 	}
+
+	public Business getBusiness() {
+		return myBusiness;
+	}
 }
 
 class PhotoWrapper {
@@ -405,6 +478,10 @@ class PhotoWrapper {
 
 	public String getFilename() {
 		return myFilename;
+	}
+
+	public String[] getTags() {
+		return myTags;
 	}
 
 	public int getID() {
@@ -435,11 +512,17 @@ class Business {
 	private Location myLocation;
 	private String myName;
 	private String myDescription;
+	private String myAddress;
 
-	public Business(String name, String desc, Location loc) {
+	public Business(String name, String desc, String address, Location loc) {
 		myLocation = loc;
 		myName = name;
+		myAddress = address;
 		myDescription = desc;
+	}
+
+	public String getAddress() {
+		return myAddress;
 	}
 
 	public Location getLocation() {
