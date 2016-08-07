@@ -182,6 +182,12 @@ class ConnectionHandler implements Runnable {
 				  for(int i = 0; i < params.length - 3; i ++) {
 				  	tags[i] = parms[3+i];
 				  }
+
+				  // receive actual image (just one)
+				  BufferedImage img = ImageIO.read(clientSocket.getInputStream());
+				  // done
+				  myParent.addPhoto(img, tags, new Location(lat, lon));
+
 				  break;
 				default:
 				  break;
@@ -205,11 +211,25 @@ class ConnectionHandler implements Runnable {
 		}
 		System.out.println("[Handler " + myID + "] Connection closed, thread done");
 
-
-
-
 	}
 }
+
+/*
+ * 
+ OutputStream os = clientSocket.getOutputStream();
+ BufferedIMage bufimg;
+ ImageIO.write(bufimg, "png", os);
+ (sender)
+
+ BufferedImage img = ImageIO.read(socket.getInputStream());
+ (receiver)
+
+
+ *
+ */
+
+
+
 
 class Beacon {
 
