@@ -90,7 +90,14 @@ class MainHandler implements Runnable {
 					}
 				}
 
-				// update photo groups with clustering
+				currentBeaconGroups = new ArrayList<Beacon>();
+				for(PhotoWrapper pw : allRecentPhotos) {
+					ArrayList<PhotoWrapper> tmp = new ArrayList<PhotoWrapper>();
+					tmp.add(pw);
+					Beacon newBeacon = new Beacon(tmp, (Beacon.last_ID++), pw.getOrigin(), pw.getImage());
+					currentBeaconGroups.append(newBeacon);
+				}
+				// update photo groups with clustering  ^^^^^^^
 				// TODO
 			}
 		}
@@ -276,6 +283,20 @@ class ConnectionHandler implements Runnable {
 				  myParent.addPhoto(img, tags, new Location(lat, lon));
 
 				  break;
+				case 6:
+				  // request to add a business
+				  // format: 
+				  // 5 [lat] [lon]
+				  // then, as SEPARATE LINE
+				  // [Business Name] (space supported)
+				  // then, as SEPARATE LINE
+				  // [Mini description] (space supported)
+				  lat = Double.parseDouble(params[1]);
+				  lon = Double.parseDouble(params[2]);
+				  String businessName = br.readLine();
+				  String businessDescription = br.readLine();
+				  String businessAddress = br.readLine();
+				  break;
 				default:
 				  break;
 			}
@@ -326,12 +347,22 @@ class Beacon {
 	private int myID;
 	private Location myCentroid;
 	private BufferedImage myFeatureImage;
+	private Business myBusiness;
 
 	public Beacon(ArrayList<PhotoWrapper> photos, int id, Location centroid, BufferedImage featureImage) {
 		myPhotos = photos;
 		myID = id;
 		myCentroid = centroid;
 		myFeatureImage = featureImage;
+		myBusiness = null;
+	}
+
+	public Beacon(ArrayList<PhotoWrapper> photos, int id, Location centroid, BufferedImage featureImage, Business business) {
+		myPhotos = photos;
+		myID = id;
+		myCentroid = centroid;
+		myFeatureImage = featureImage;
+		myBusiness = business;
 	}
 
 	public int getID() {
@@ -348,6 +379,10 @@ class Beacon {
 
 	public BufferedImage getFeatureImage() {
 		return myFeatureImage;
+	}
+
+	public boolean isBusiness() {
+		return myBusiness != null;
 	}
 }
 
@@ -395,6 +430,30 @@ class PhotoWrapper {
 	}
 }
 
+class Business {
+
+	private Location myLocation;
+	private String myName;
+	private String myDescription;
+
+	public Business(String name, String desc, Location loc) {
+		myLocation = loc;
+		myName = name;
+		myDescription = desc;
+	}
+
+	public Location getLocation() {
+		return myLocation;
+	}
+
+	public String getName() {
+		return myName;
+	}
+
+	public String getDescription() {
+		return myDescription;
+	}
+}
 
 
 class Location {
@@ -415,3 +474,4 @@ class Location {
 		return lon;
 	}
 }
+
