@@ -3,10 +3,12 @@ import java.net.Socket;
 import javax.imageio.ImageIO;
 import java.util.*;
 import java.lang.*;
+import java.lang.Math;
 import java.io.*;
+import java.awt.image.BufferedImage;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
-
-public class BeaconServer 
+public class BeaconServer
 {
 	public static final int PORT_NUMBER = 25565;
 
@@ -14,6 +16,9 @@ public class BeaconServer
 		try {
 			BeaconServer myServ = new BeaconServer(PORT_NUMBER);
 			myServ.serverMain();
+		}
+		catch(Exception e) {
+
 		}
 	}
 
@@ -24,7 +29,7 @@ public class BeaconServer
 		System.out.println("Beacon Server Initiated on Port #" + myPort);
 	}
 
-	public void serverMain() {
+	public void serverMain() throws Exception {
 		System.out.println("[Beacon Server] starting main");
 		ServerSocket serverSocket;
 		Socket curSocket;
@@ -71,34 +76,46 @@ class MainHandler implements Runnable {
 	}
 
 	public void run() {
-		while(true) {
+		try {
+			while(true) {
 
-			Thread.sleep(60000); // every minute
-			long curtime = System.nanoTime();
-			for(int i = 0; i < allRecentPhotos.size(); i ++) {
-				if((curtime - allRecentPhotos.get(i).getTimestamp()) > 3600000000000) {
-					// one hour has passed, take it out
-					allRecentPhotos.remove(i);
-					System.out.println("Removing photo (id " + allRecentPhotos.getID() + "), time delay 1 hour hit");
-					i --;
+				Thread.sleep(60000); // every minute
+				long curtime = System.nanoTime();
+				for(int i = 0; i < allRecentPhotos.size(); i ++) {
+					if((curtime - allRecentPhotos.get(i).getTimestamp()) > 3600000000000L) {
+						// one hour has passed, take it out
+						allRecentPhotos.remove(i);
+						System.out.println("Removing photo (id " + allRecentPhotos.get(i).getID() + "), time delay 1 hour hit");
+						i --;
+					}
 				}
-			}
 
-			// update photo groups with clustering
-			// TODO
+				// update photo groups with clustering
+				// TODO
+			}
+		}
+		catch(Exception e) {
+
 		}
 	}
 
 	// ---------------
 	// credit for this method goes to http://www.geodatasource.com/developers/java
 	// ---------------
-	private static double distance(double lat1, double lon1, double lat2, double lon2) {
+	public static double distance(double lat1, double lon1, double lat2, double lon2) {
 		double theta = lon1 - lon2;
 		double dist = Math.sin(deg2rad(lat1)) * Math.sin(deg2rad(lat2)) + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.cos(deg2rad(theta));
 		dist = Math.acos(dist);
 		dist = rad2deg(dist);
 		dist = dist * 60 * 1.1515;
 		return (dist);
+	}
+	public static double deg2rad(double deg) {
+		return (deg * Math.PI / 180.0);
+	}
+
+	public static double rad2deg(double rad) {
+		return (rad * 180 / Math.PI);
 	}
 	// ---------------
 
@@ -122,16 +139,21 @@ class MainHandler implements Runnable {
 	}
 
 	public void addPhoto(BufferedImage newPhoto, String[] tags, Location origin) {
-		if(recentTenPhotos.size() >= 10) {
-			recentTenPhotos.poll();
+		try {
+			if(recentTenPhotos.size() >= 10) {
+				recentTenPhotos.poll();
+			}
+			recentTenPhotos.add(newPhoto);
+			int id = PhotoWrapper.last_ID;
+			PhotoWrapper.last_ID ++;
+			String filename = "img_" + id + ".png";
+			ImageIO.write(newPhoto, "png", new File(filename));
+			PhotoWrapper newPhotoWrapper = new PhotoWrapper(filename, tags, System.nanoTime(), id, origin);
+			allRecentPhotos.add(newPhotoWrapper);
 		}
-		recentTenPhotos.add(newPhoto);
-		int id = PhotoWrapper.last_ID;
-		PhotoWrapper.last_ID ++;
-		String filename = "img_" + id + ".png";
-		ImageIO.write(newPhoto, "png", new File(filename))
-		PhotoWrapper newPhoto = new PhotoWrapper(filename, tags, System.nanoTime(), id, origin);
-		allRecentPhotos.add(newPhoto);
+		catch(Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	// TODO: return events
@@ -148,29 +170,75 @@ class ConnectionHandler implements Runnable {
 		myParent = parent;
 		mySocketClient = myClient;
 		myID = nID;
+		System.out.println("New connection handler created!");
 	}
 
 
 	public void run() {
 
 		try {
-			OutputStream os = clientSocket.getOutputStream();
+			OutputStream os = mySocketClient.getOutputStream();
 			PrintWriter pw = new PrintWriter(os, true);
-			BufferedReader br = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+			BufferedReader br = new BufferedReader(new InputStreamReader(mySocketClient.getInputStream()));
 
 			String request = br.readLine();
 
-			String[] params = request.split(" ");
-			int requestType = Integer.parseInt(params[0]);
+			System.out.println("Here is raw request line: " + request);
 
+			String[] params = request.split(" ");
+			System.out.println(params);
+			int requestType = Integer.parseInt(params[0]);
+			System.out.println("Identified request type as " + requestType);
 			switch(requestType) {
 				case 1:
+				  // startup, give us 10 buffered images and ???
+				  // technically they gave us location, but we're just sending last 10 soz
+				  OutputStream os = clientSocket.getOutputStream();
+				  BufferedImage[] recentTen = parent.getRecentTenPhotos();
+				  for(BufferedImage bufimg : recentTen) {
+				  	ImageIO.write(bufimg, "png", os);
+				  }
 
 				  break;
-				case 2:
+
+				case 2: // case 2, given location and radius, send back all the beacons, their coords, their ids, 
+				        // and all their feature images
+
+				  // reading what user sent me
+				  double lat = Double.parseDouble(params[1]);
+				  double lon = Double.parseDouble(params[2]);
+				  double radius = Double.parseDouble(params[3]);
+
+				  ArrayList<Beacon> nearbyBeacons = parent.getBeaconLocations(radius, lat, lon);
+
+
+				  int numNearby = nearbyBeacons.size(); // how many beacons stuff we have to send
+				  String responseString = "" + numNearby + " "; // first thing that gets sent, will be followed by
+				                                          // by numNearby doubles (lats), another numNearby doubles (longs),
+				                                          // another numNearby ints (ids), and then numNearby BufferedImages
+				  for(Beacon tmp : nearbyBeacons) {
+				  	responseString += tmp.getCentroid().lat() + " "; // append all the latitudes (we have exactly (numNearby) of them )
+				  }
+				  for(Beacon tmp : nearbyBeacons) {
+				  	responseString += tmp.getCentroid().lon() + " "; // longs
+				  }
+				  for(Beacon tmp : nearbyBeacons) {
+				  	responseString += tmp.getID() + " "; // ids
+				  }
+				  // response string is now done, sending it,
+				  pw.println(responseString);
+				  
+				  OutputStream os = clientSocket.getOutputStream();
+				  // now we send the images (after string has been received and parsed)
+				  for(Beacon tmp : nearbyBeacons) {
+				  	            // (Buffered Image)   ,  
+				  	ImageIO.write(tmp.getFeatureImage(), "png", os);
+				  }
 
 				  break;
 				case 3:
+				  
+
 
 				  break;
 				case 5:
@@ -178,13 +246,17 @@ class ConnectionHandler implements Runnable {
 				  // 5 [lat] [lon] [tag1] [tag2] ... [tag3]
 				  double lat = Double.parseDouble(params[1]);
 				  double lon = Double.parseDouble(params[2]);
+				  System.out.println("Parsed lat and lon as " + lat + ", " + lon);
 				  String[] tags = new String[(params.length - 3)];
 				  for(int i = 0; i < params.length - 3; i ++) {
-				  	tags[i] = parms[3+i];
+				  	tags[i] = params[3+i];
 				  }
 
 				  // receive actual image (just one)
-				  BufferedImage img = ImageIO.read(clientSocket.getInputStream());
+				  System.out.println("Now attempting to read image");
+				  BufferedImage img = ImageIO.read(mySocketClient.getInputStream());
+				  System.out.println("Image read");
+				  System.out.println("Now formatting nice photo and calling parent whatchaminiot");
 				  // done
 				  myParent.addPhoto(img, tags, new Location(lat, lon));
 
@@ -192,7 +264,6 @@ class ConnectionHandler implements Runnable {
 				default:
 				  break;
 			}
-
 			// pw.println("xd xd lmfao");
 		}
 		//catch(Exception e) {
@@ -203,7 +274,7 @@ class ConnectionHandler implements Runnable {
 		}
 
 		try {
-			clientSocket.close();
+			mySocketClient.close();
 		}
 		catch(IOException ioe) {
 			System.out.println("[Handler " + myID + "] could not close connection (???)");
@@ -233,6 +304,9 @@ class ConnectionHandler implements Runnable {
 
 class Beacon {
 
+	public static int last_ID = 1000;
+	// doesn't matter if intersects with photowrapper id values, just distinguishing for debugging
+
 	private ArrayList<PhotoWrapper> myPhotos;
 	private int myID;
 	private Location myCentroid;
@@ -243,6 +317,10 @@ class Beacon {
 		myID = id;
 		myCentroid = centroid;
 		myFeatureImage = featureImage;
+	}
+
+	public int getID() {
+		return myID;
 	}
 
 	public ArrayList<PhotoWrapper> getPhotos() {
@@ -284,15 +362,21 @@ class PhotoWrapper {
 	}
 
 	public Location getOrigin() {
-		return myOrigin
+		return myOrigin;
 	}
 
 	public long getTimestamp() {
-		return timeCreated;
+		return myTimeCreated;
 	}
 
 	public BufferedImage getImage() {
-		return ImageIO.read(new File(myFilename));
+		try {
+			return ImageIO.read(new File(myFilename));
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+			return null;
+		}
 	}
 }
 
